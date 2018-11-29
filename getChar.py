@@ -6,11 +6,11 @@ import logging
 import matplotlib.pyplot as plt
 from numpy.core.multiarray import ndarray
 import os
-import six
 import re
-from typing import Text, List
+from utils import list_directory, list_files
 
 MAX_CHARS_IN_PLATE = 12
+FIXED_OUTPUT_SIZE  = 20
 
 
 def isNearlyMaxLength(contour, image):
@@ -56,38 +56,6 @@ def tooThin(contour, image):
         return False
 
 
-def list_directory(path):
-    # type: (Text) -> List[Text]
-    """Returns all files and folders excluding hidden files.
-
-    If the path points to a file, returns the file. This is a recursive
-    implementation returning files in any depth of the path."""
-
-    if not isinstance(path, six.string_types):
-        raise ValueError("Resourcename must be a string type")
-
-    if os.path.isfile(path):
-        return [path]
-    elif os.path.isdir(path):
-        results = []
-        for base, dirs, files in os.walk(path):
-            # remove hidden files
-            goodfiles = filter(lambda x: not x.startswith('.'), files)
-            results.extend(os.path.join(base, f) for f in goodfiles)
-        return results
-    else:
-        raise ValueError("Could not locate the resource '{}'."
-                         "".format(os.path.abspath(path)))
-
-
-def list_files(folder_path):
-    # type: (Text) -> List[Text]
-    """Returns all files excluding hidden files.
-    If the path points to a file, returns the file."""
-
-    return [fn for fn in list_directory(folder_path) if os.path.isfile(fn)]
-
-
 def getLabel(file_path=''):
     # type: (str) -> str
     try:
@@ -106,8 +74,10 @@ def getChars(img_path='',
              show_more_info_pics=False,
              draw_contour_rectangle_to_img=False,
              show_image=False,
+             crop_threshold_img=False,
+             padding_cropped_img=True,
              **kwargs):
-    # type: (str, str, bool, bool, bool, bool, ...) -> None
+    # type: (str, str, bool, bool, bool, bool, bool, bool, ...) -> None
 
     if img_path == '':
         logging.ERROR("No image has chosen !!!")
@@ -125,32 +95,27 @@ def getChars(img_path='',
     # equal_histogram = cv2.equalizeHist(gray_img)
 
     # Noise removing
-    noise_removal = cv2.medianBlur(gray_img, 3)
+    # noise_removal = cv2.medianBlur(gray_img, 3)
 
     # Edge Sharpening
     # kernel3 = np.ones((3, 3), np.uint8)
     # edge_sharpening = cv2.dilate(noise_removal, kernel3, iterations = 1)
 
     # Convert to Binary Image
-    thre = cv2.adaptiveThreshold(noise_removal, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 41, 0)
+    # thre = cv2.adaptiveThreshold(noise_removal, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 41, 0)
+    noise_removal = cv2.GaussianBlur(gray_img, (5, 5), 0)
+    _, thre = cv2.threshold(noise_removal, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
     _, cont, hier = cv2.findContours(thre,
                                      cv2.RETR_CCOMP,
                                      cv2.CHAIN_APPROX_SIMPLE)
     if show_more_info_pics:
-        thre_gray_img = cv2.adaptiveThreshold(gray_img, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
-                                              cv2.THRESH_BINARY_INV, 41, 0)
-        thre_noise_removal = cv2.adaptiveThreshold(noise_removal, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
-                                                   cv2.THRESH_BINARY_INV, 41, 0)
-        # thre_edge_sharpening = cv2.adaptiveThreshold(edge_sharpening, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
-        #                                              cv2.THRESH_BINARY_INV, 41, 0)
-        # thre_equal_histogram = cv2.adaptiveThreshold(equal_histogram, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
-        #                                              cv2.THRESH_BINARY_INV, 41, 0)
-
-        cv2.imshow("Gray_img", thre_gray_img)
+        cv2.imshow("Gray_img", gray_img)
         # cv2.imshow("Equal_histogram", thre_equal_histogram)
-        cv2.imshow("Noise_removal", thre_noise_removal)
+        cv2.imshow("Noise_removal", noise_removal)
         # cv2.imshow("Edge_sharpening", thre_edge_sharpening)
+        cv2.imshow("OtsuThreshold", thre)
+
         if add_contour_dots_to_img:
             cv2.drawContours(image, cont, -1, (0, 255, 0), 1)
             cv2.imshow("Contour", image)
@@ -196,16 +161,23 @@ def getChars(img_path='',
     char_positions = char_positions[(char_positions[:, 0] + char_positions[:, 1] * 3).argsort()[::1]]
 
     for idx, position in enumerate(char_positions):
-        crop_img = thre[position[1]:position[1] + position[3], position[0]:position[0] + position[2]]
-        max_size = max(crop_img.shape[0], crop_img.shape[1])
-        delta_w = max_size - crop_img.shape[1]
-        delta_h = max_size - crop_img.shape[0]
-        top, bottom = delta_h // 2, delta_h - (delta_h // 2)
-        left, right = delta_w // 2, delta_w - (delta_w // 2)
-        WHITE = [255, 255, 255]
-        BLACK = [0, 0, 0]
-        resized_image = cv2.copyMakeBorder(crop_img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=BLACK)
-        resized_image = cv2.bitwise_not(resized_image)
+        if crop_threshold_img:
+            crop_img = thre[position[1]:position[1] + position[3], position[0]:position[0] + position[2]]
+        else:
+            crop_img = image[position[1]:position[1] + position[3], position[0]:position[0] + position[2]]
+
+        if padding_cropped_img:
+            max_size = max(crop_img.shape[0], crop_img.shape[1])
+            delta_w = max_size - crop_img.shape[1]
+            delta_h = max_size - crop_img.shape[0]
+            top, bottom = delta_h // 2, delta_h - (delta_h // 2)
+            left, right = delta_w // 2, delta_w - (delta_w // 2)
+            WHITE = [255, 255, 255]
+            crop_img = cv2.copyMakeBorder(crop_img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=WHITE)
+        else:
+            resized_image = cv2.resize(crop_img, (FIXED_OUTPUT_SIZE, FIXED_OUTPUT_SIZE))
+
+        # resized_image = cv2.bitwise_not(resized_image)
         # folder_name = getLabel(img_path)
         # if folder_name == '':
         #     return
@@ -221,15 +193,19 @@ def getChars(img_path='',
 
 
 if __name__ == '__main__':
-    path_name = "./1/"
+    path_name = "./number_plates"
     for f in list_files(path_name)[:100]:
         getChars(f, path_name,
                  add_contour_dots_to_img=False,
                  show_more_info_pics=False,
                  draw_contour_rectangle_to_img=False,
-                 show_image=False)
+                 show_image=False,
+                 crop_threshold_img=False,
+                 padding_cropped_img=True)
     # getChars("./1/96D62BBE_51D-077.17_01022018092225_i3.jpg",
     #          add_contour_dots_to_img=False,
     #          show_more_info_pics=False,
     #          draw_contour_rectangle_to_img=True,
-    #          show_image=True)
+    #          show_image=True,
+    #          crop_threshold_img=False,
+    #          padding_cropped_img=True)
