@@ -4,7 +4,7 @@ from skimage.io import imread
 from skimage.filters import threshold_otsu
 
 model = joblib.load('./svc.pkl')
-image_path = '/home/cpu10132/NumberPlateRecognition/number_plate/cafeauto_biensocafeauto01-1487586495/8.jpg'
+image_path = './number_plates/26EE610E_66C1-078.83_01022018073256_i3/8.jpg'
 img_details = imread(image_path, as_gray=True)
 img_details = resize(img_details, (20, 20))
 

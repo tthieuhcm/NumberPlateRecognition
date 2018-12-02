@@ -1,4 +1,3 @@
-import __future__
 import errno
 import cv2
 import numpy as np
@@ -7,7 +6,7 @@ import matplotlib.pyplot as plt
 from numpy.core.multiarray import ndarray
 import os
 import re
-from utils import list_directory, list_files
+from utils import list_files
 
 MAX_CHARS_IN_PLATE = 12
 FIXED_OUTPUT_SIZE  = 20
@@ -31,7 +30,7 @@ def isNearlyMinLength(contour, image):
     # type: (ndarray, ndarray) -> bool
     even = contour.flatten()[0::2]  # X-axis
     odd = contour.flatten()[1::2]  # Y-axis
-    adaptThreshold = 0.073
+    adaptThreshold = 0.068
     if 2 * image.shape[0] < image.shape[1]:
         adaptThreshold = 0.03
     if (even.max() - even.min()) * (odd.max() - odd.min()) < 0.01 * image.shape[0] * image.shape[1] or \
@@ -51,6 +50,16 @@ def tooThin(contour, image):
         adaptThreshold = 20
     if (even.max() - even.min()) > adaptThreshold * (odd.max() - odd.min()) or \
             (odd.max() - odd.min()) > adaptThreshold * (even.max() - even.min()):
+        return True
+    else:
+        return False
+
+
+def isLyingRectangle(contour):
+    # type: (ndarray) -> bool
+    even = contour.flatten()[0::2]  # X-axis
+    odd = contour.flatten()[1::2]  # Y-axis
+    if (even.max() - even.min()) > (odd.max() - odd.min()):
         return True
     else:
         return False
@@ -131,7 +140,8 @@ def getChars(img_path='',
         if hier[0][idx][3] == -1 and \
                 not isNearlyMaxLength(cnt, image) and \
                 not isNearlyMinLength(cnt, image) and \
-                not tooThin(cnt, image):
+                not tooThin(cnt, image) and \
+                not isLyingRectangle(cnt):
 
             area = cv2.contourArea(cnt)
             if area in areas_idx:
@@ -173,7 +183,7 @@ def getChars(img_path='',
             top, bottom = delta_h // 2, delta_h - (delta_h // 2)
             left, right = delta_w // 2, delta_w - (delta_w // 2)
             WHITE = [255, 255, 255]
-            crop_img = cv2.copyMakeBorder(crop_img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=WHITE)
+            resized_image = cv2.copyMakeBorder(crop_img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=WHITE)
         else:
             resized_image = cv2.resize(crop_img, (FIXED_OUTPUT_SIZE, FIXED_OUTPUT_SIZE))
 
@@ -201,7 +211,7 @@ if __name__ == '__main__':
                  draw_contour_rectangle_to_img=False,
                  show_image=False,
                  crop_threshold_img=False,
-                 padding_cropped_img=True)
+                 padding_cropped_img=False)
     # getChars("./1/96D62BBE_51D-077.17_01022018092225_i3.jpg",
     #          add_contour_dots_to_img=False,
     #          show_more_info_pics=False,
