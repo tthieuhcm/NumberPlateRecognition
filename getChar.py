@@ -7,9 +7,10 @@ from numpy.core.multiarray import ndarray
 import os
 import re
 from utils import list_files
+from OCR import readFolderAndClassify
 
 MAX_CHARS_IN_PLATE = 12
-FIXED_OUTPUT_SIZE  = 20
+FIXED_OUTPUT_SIZE = 20
 
 
 def isNearlyMaxLength(contour, image):
@@ -86,7 +87,7 @@ def getChars(img_path='',
              crop_threshold_img=False,
              padding_cropped_img=True,
              **kwargs):
-    # type: (str, str, bool, bool, bool, bool, bool, bool, ...) -> None
+    # type: (str, str, bool, bool, bool, bool, bool, bool, ...) -> str
 
     if img_path == '':
         logging.ERROR("No image has chosen !!!")
@@ -94,8 +95,9 @@ def getChars(img_path='',
     image = cv2.imread(img_path)
 
     if image is None:
+        print(img_path)
         logging.ERROR("Can't load image !!!")
-        return
+        return ''
 
     # Convert to gray image
     gray_img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -164,7 +166,7 @@ def getChars(img_path='',
 
     if char_positions.__len__() == 0:
         logging.info(img_path + " has no contour. Need to check again.")
-        return
+        return ''
 
     # Sort the position of characters
     char_positions = np.array(char_positions)
@@ -200,22 +202,27 @@ def getChars(img_path='',
                 raise
         # cv2.imwrite(pth_name + folder_name + '/' + str(idx) + '.jpg', crop_img)
         cv2.imwrite(img_path[:-4] + '/' + str(idx) + '.jpg', resized_image)
+    return img_path[:-4]
 
 
 if __name__ == '__main__':
-    path_name = "./number_plates"
-    for f in list_files(path_name)[:100]:
-        getChars(f, path_name,
-                 add_contour_dots_to_img=False,
-                 show_more_info_pics=False,
-                 draw_contour_rectangle_to_img=False,
-                 show_image=False,
-                 crop_threshold_img=False,
-                 padding_cropped_img=False)
-    # getChars("./1/96D62BBE_51D-077.17_01022018092225_i3.jpg",
-    #          add_contour_dots_to_img=False,
-    #          show_more_info_pics=False,
-    #          draw_contour_rectangle_to_img=True,
-    #          show_image=True,
-    #          crop_threshold_img=False,
-    #          padding_cropped_img=True)
+    path_name = "./numberplates"
+    total = 0
+    hit = 0
+    for f in list_files(path_name):
+        total += 1
+        path = getChars(f, path_name,
+                        add_contour_dots_to_img=False,
+                        show_more_info_pics=False,
+                        draw_contour_rectangle_to_img=False,
+                        show_image=False,
+                        crop_threshold_img=False,
+                        padding_cropped_img=False)
+        if path != '':
+            result = readFolderAndClassify(path)
+            # print("result: ", result)
+            # print("target: ", getLabel(f))
+
+            if result == getLabel(f):
+                hit += 1
+    print(hit/total)
