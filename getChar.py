@@ -220,8 +220,8 @@ if __name__ == '__main__':
                         padding_cropped_img=False)
         if path != '':
             result = readFolderAndClassify(path)
-            # print("result: ", result)
-            # print("target: ", getLabel(f))
+            print("result: ", result)
+            print("target: ", getLabel(f))
 
             if result == getLabel(f):
                 hit += 1

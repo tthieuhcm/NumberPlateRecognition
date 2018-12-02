@@ -4,6 +4,9 @@ import imutils
 import copy
 import os
 from random import shuffle
+from OCR import readFolderAndClassify
+from getChar import getChars, getLabel
+from utils import list_files
 
 
 def sharpening(img, level=5):
@@ -52,9 +55,9 @@ def noise_reducting(img, brush_size=15, intensity=30):
 
 def plate_detection(in_img, img_name):
     in_img = imutils.resize(in_img, 800)
-    crop_top = in_img.shape[0]//8
+    crop_top = in_img.shape[0] // 8
     crop_bot = in_img.shape[0] - crop_top
-    crop_left = in_img.shape[1]//8
+    crop_left = in_img.shape[1] // 8
     crop_right = in_img.shape[1] - crop_left
     in_img = in_img[crop_top:crop_bot, crop_left:crop_right]
     # cv2.imshow("based img", in_img)
@@ -82,26 +85,24 @@ def plate_detection(in_img, img_name):
     # loop over our contours to find the best possible approximate contour of number plate
     count = 0
     for index, c in enumerate(cnts):
-            peri = cv2.arcLength(c, True)
+        peri = cv2.arcLength(c, True)
 
-            approx = cv2.approxPolyDP(c, 0.07 * peri, True)
+        approx = cv2.approxPolyDP(c, 0.07 * peri, True)
 
-            # print(approx)
-            # rectan = cv2.boundingRect(approx)
-            # convex = cv2.convexHull(approx)
-            # all_contour.append(approx)
-            x, y, w, h = cv2.boundingRect(approx)
-            # ratio = w/h
+        # print(approx)
+        # rectan = cv2.boundingRect(approx)
+        # convex = cv2.convexHull(approx)
+        # all_contour.append(approx)
+        x, y, w, h = cv2.boundingRect(approx)
+        # ratio = w/h
 
-            if ((w > 140 and h < 70) or (h >= 70 and w > 90)) and len(approx) == 4 and cv2.isContourConvex(approx):  # Select the contour with 4 corners
-                NumberPlateCnt = approx #This is our approx Number Plate Contour
-                cropped_plate = in_img[y:y + h, x:x + w]
-                # print(cur_path + 'cropped2/' + img_name)
-                cv2.imwrite(cur_path + 'cropped4/' + img_name, cropped_plate)
-                break
-
-
-
+        if ((w > 140 and h < 70) or (h >= 70 and w > 90)) and len(approx) == 4 and cv2.isContourConvex(
+                approx):  # Select the contour with 4 corners
+            NumberPlateCnt = approx  # This is our approx Number Plate Contour
+            cropped_plate = in_img[y:y + h, x:x + w]
+            # print(cur_path + 'cropped2/' + img_name)
+            cv2.imwrite(cur_path + 'cropped/' + img_name, cropped_plate)
+            break
 
     # if NumberPlateCnt is not None :
     #     # cv2.imshow('crop', cv2.findNonZero(mask))
@@ -110,28 +111,9 @@ def plate_detection(in_img, img_name):
     #     # cv2.drawContours(in_img, [NumberPlateCnt], -1, (0, 255, 0), 3)
     #     # cv2.imshow("Final Image With Number Plate Detected ", in_img)
 
-
     # cv2.drawContours(in_img, all_contour, -1, (0, 0, 255), 3)
     # cv2.imshow("All contour ", in_img)
     # cv2.waitKey(0) #Wait for user input before closing the images displayed
-
-
-cur_path = '/media/binhct/D_Volume/HOCTAP/HK181/CV/'
-img_file = [f for f in os.listdir(cur_path + 'whole_plate/') if os.path.isfile(cur_path + 'whole_plate/' + f)]
-# img_file = [f for f in os.listdir(cur_path + 'Bike_back/') if os.path.isfile(cur_path + 'Bike_back/' + f)]
-# shuffle(img_file)
-index = 0
-for i in img_file[10000:] :
-    path = cur_path + 'whole_plate/' + i
-    # path = 'whole_plate/060D1C10_51D-025.49_01022018114253_o2.jpg'
-    print(path)
-    img = cv2.imread(path)
-    plate_detection(img, i)
-    # preprocessing(img)
-    # cv2.waitKey(0)
-    index +=1
-    # if index == 1000:
-    #     break
 
 
 def batch_plate_detect(img_folder, output_folder):
@@ -142,3 +124,40 @@ def batch_plate_detect(img_folder, output_folder):
         img = cv2.imread(path)
         plate_detection(img, i)
         # cv2.waitKey(0)
+
+
+if __name__ == '__main__':
+    cur_path = './FullPics/'
+    img_file = [f for f in os.listdir(cur_path) if os.path.isfile(cur_path + f)]
+    # img_file = [f for f in os.listdir(cur_path + 'Bike_back/') if os.path.isfile(cur_path + 'Bike_back/' + f)]
+    # shuffle(img_file)
+    index = 0
+    for i in img_file[:1000]:
+        path = cur_path + i
+        # path = 'whole_plate/060D1C10_51D-025.49_01022018114253_o2.jpg'
+        # print(path)
+        img = cv2.imread(path)
+        plate_detection(img, i)
+        # preprocessing(img)
+        # cv2.waitKey(0)
+        index += 1
+        # if index == 1000:
+        #     break
+
+    path_name = cur_path + 'cropped'
+    total = 0
+    hit = 0
+    for f in list_files(path_name):
+        total += 1
+        path = getChars(f, path_name,
+                        add_contour_dots_to_img=False,
+                        show_more_info_pics=False,
+                        draw_contour_rectangle_to_img=False,
+                        show_image=False,
+                        crop_threshold_img=False,
+                        padding_cropped_img=False)
+        if path != '':
+            result = readFolderAndClassify(path)
+            if result == getLabel(f):
+                hit += 1
+    print(hit / total)
